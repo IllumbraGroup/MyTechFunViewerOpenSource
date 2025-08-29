@@ -6,8 +6,7 @@
 A modern web application for analyzing and comparing 3D printer filament properties from MyTechFun Excel files. This version focuses on easy and effortless comparison of filament properties with interactive visualizations.
 
 
-![Bildschirmaufnahme 2025-08-29 um 10 34 50](https://github.com/user-attachments/assets/32b94b53-7b62-471d-a334-0ac7699de401)
-
+![Bildschirmaufnahme 2025-08-29 um 10 34 50 2](https://github.com/user-attachments/assets/b7454504-56d4-4a3a-a17f-620d9d37f83a)
 
 
 
