@@ -3,6 +3,7 @@ import FileUpload from './components/FileUpload';
 import FilterPanel from './components/FilterPanel';
 import DataTable from './components/DataTable';
 import Charts from './components/Charts';
+import ErrorBoundary from './components/ErrorBoundary';
 import { FilamentData, FilterState, ChartConfig } from './types';
 import { parseExcelFile, validateExcelData } from './utils/excel';
 
@@ -203,8 +204,16 @@ const App: React.FC = () => {
     }));
   };
 
+  const LoadingSpinner = () => (
+    <div className="flex items-center justify-center">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <span className="ml-3 text-gray-600">Loading...</span>
+    </div>
+  );
+
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
+    <ErrorBoundary>
+      <div className="h-screen flex flex-col bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b px-6 py-4">
         <div className="flex items-center justify-between">
@@ -301,13 +310,27 @@ const App: React.FC = () => {
         ) : (
           <>
             {/* Filter Panel */}
-            <FilterPanel
-              data={data}
-              filters={filters}
-              onFiltersChange={setFilters}
-              isCollapsed={filtersCollapsed}
-              onToggleCollapse={() => setFiltersCollapsed(!filtersCollapsed)}
-            />
+            <ErrorBoundary fallback={
+              <div className="w-80 bg-red-50 border-r border-red-200 flex items-center justify-center">
+                <div className="text-center p-4">
+                  <p className="text-red-600 text-sm">Filter panel error</p>
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="mt-2 text-xs text-red-800 underline"
+                  >
+                    Reload page
+                  </button>
+                </div>
+              </div>
+            }>
+              <FilterPanel
+                data={data}
+                filters={filters}
+                onFiltersChange={setFilters}
+                isCollapsed={filtersCollapsed}
+                onToggleCollapse={() => setFiltersCollapsed(!filtersCollapsed)}
+              />
+            </ErrorBoundary>
 
             {/* Main Content Area */}
             <div className="flex-1 flex flex-col min-w-0">
@@ -321,6 +344,7 @@ const App: React.FC = () => {
                         value={chartConfig.type}
                         onChange={(e) => handleChartTypeChange(e.target.value as any)}
                         className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        aria-label="Select chart type"
                       >
                         <option value="scatter">Scatter Plot</option>
                         <option value="bar">Bar Chart</option>
@@ -336,6 +360,7 @@ const App: React.FC = () => {
                             value={chartConfig.xAxis}
                             onChange={(e) => handleChartAxisChange('xAxis', e.target.value)}
                             className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            aria-label="Select X-axis variable"
                           >
                             {numericColumns.map(col => (
                               <option key={col} value={col}>{col}</option>
@@ -349,6 +374,7 @@ const App: React.FC = () => {
                             value={chartConfig.yAxis}
                             onChange={(e) => handleChartAxisChange('yAxis', e.target.value)}
                             className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            aria-label="Select Y-axis variable"
                           >
                             {numericColumns.map(col => (
                               <option key={col} value={col}>{col}</option>
@@ -363,22 +389,67 @@ const App: React.FC = () => {
 
               {/* Content */}
               <div className="flex-1 p-6 min-h-0 min-w-0">
-                {activeTab === 'table' ? (
-                  <DataTable data={filteredData} />
+                {loading ? (
+                  <div className="flex-1 flex items-center justify-center">
+                    <LoadingSpinner />
+                  </div>
+                ) : activeTab === 'table' ? (
+                  <ErrorBoundary fallback={
+                    <div className="flex-1 flex items-center justify-center bg-red-50 rounded-lg border border-red-200">
+                      <div className="text-center p-8">
+                        <div className="text-red-500 mb-4">
+                          <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+                        <h3 className="text-lg font-medium text-red-800 mb-2">Table Display Error</h3>
+                        <p className="text-red-600 text-sm mb-4">There was an error displaying the data table.</p>
+                        <button
+                          onClick={() => window.location.reload()}
+                          className="px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                        >
+                          Reload Page
+                        </button>
+                      </div>
+                    </div>
+                  }>
+                    <DataTable data={filteredData} />
+                  </ErrorBoundary>
                 ) : (
-                  <Charts
-                    data={filteredData}
-                    chartType={chartConfig.type}
-                    xAxis={chartConfig.xAxis}
-                    yAxis={chartConfig.yAxis}
-                  />
+                  <ErrorBoundary fallback={
+                    <div className="flex-1 flex items-center justify-center bg-red-50 rounded-lg border border-red-200">
+                      <div className="text-center p-8">
+                        <div className="text-red-500 mb-4">
+                          <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                          </svg>
+                        </div>
+                        <h3 className="text-lg font-medium text-red-800 mb-2">Chart Display Error</h3>
+                        <p className="text-red-600 text-sm mb-4">There was an error displaying the charts.</p>
+                        <button
+                          onClick={() => window.location.reload()}
+                          className="px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                        >
+                          Reload Page
+                        </button>
+                      </div>
+                    </div>
+                  }>
+                    <Charts
+                      data={filteredData}
+                      chartType={chartConfig.type}
+                      xAxis={chartConfig.xAxis}
+                      yAxis={chartConfig.yAxis}
+                    />
+                  </ErrorBoundary>
                 )}
               </div>
             </div>
           </>
         )}
+        </div>
       </div>
-    </div>
+    </ErrorBoundary>
   );
 };
 

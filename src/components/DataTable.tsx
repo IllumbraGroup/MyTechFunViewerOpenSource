@@ -12,6 +12,7 @@ type SortConfig = {
 
 const DataTable: React.FC<DataTableProps> = ({ data }) => {
   const [sortConfig, setSortConfig] = useState<SortConfig>(null);
+  const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null);
 
   const sortedData = useMemo(() => {
     if (!sortConfig) return data;
@@ -72,14 +73,101 @@ const DataTable: React.FC<DataTableProps> = ({ data }) => {
     );
   };
 
+  // YouTube URL validation
+  const isValidYouTubeUrl = (url: string): boolean => {
+    if (!url || typeof url !== 'string') return false;
+    const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)[a-zA-Z0-9_-]{11}(&.*)?$/;
+    return youtubeRegex.test(url.trim());
+  };
+
+  // Convert Excel serial date to JavaScript Date
+  const excelSerialToDate = (serial: number): Date => {
+    // Excel dates start from January 1, 1900 (with 1 = January 1, 1900)
+    // But Excel incorrectly treats 1900 as a leap year, so we need to account for that
+    const excelEpoch = new Date(1899, 11, 30); // December 30, 1899
+    const daysSinceEpoch = Math.floor(serial);
+    const timeFraction = serial - daysSinceEpoch;
+    
+    const date = new Date(excelEpoch.getTime() + daysSinceEpoch * 24 * 60 * 60 * 1000);
+    
+    // Add the time portion if it exists
+    if (timeFraction > 0) {
+      const hours = Math.floor(timeFraction * 24);
+      const minutes = Math.floor((timeFraction * 24 - hours) * 60);
+      const seconds = Math.floor(((timeFraction * 24 - hours) * 60 - minutes) * 60);
+      
+      date.setHours(hours, minutes, seconds);
+    }
+    
+    return date;
+  };
+
   const formatValue = (value: any, key: string) => {
+    // Handle Date columns (Excel serial numbers)
+    if (key.toLowerCase().includes('date') && typeof value === 'number' && value > 1000) {
+      try {
+        const date = excelSerialToDate(value);
+        // Check if the date is valid
+        if (!isNaN(date.getTime())) {
+          return date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+          });
+        }
+      } catch (error) {
+        console.warn('Failed to convert Excel date:', value, error);
+      }
+    }
+    
     if (typeof value === 'number') {
       if (key.includes('Temperature') || key.includes('Price')) {
         return value.toFixed(1);
       }
       return value.toFixed(2);
     }
+    
+    // Handle YouTube Link column
+    if (key === 'YouTube Link' && value) {
+      const urlString = String(value).trim();
+      if (isValidYouTubeUrl(urlString)) {
+        return (
+          <div className="flex items-center space-x-2">
+            <a
+              href={urlString}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center space-x-1 text-blue-600 hover:text-blue-800 transition-colors"
+              aria-label={`Open YouTube video in new tab`}
+            >
+              <span className="text-sm">Watch Video</span>
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+            </a>
+          </div>
+        );
+      } else if (urlString) {
+        return (
+          <span className="text-gray-400 text-sm" title="Invalid YouTube URL">
+            Invalid URL
+          </span>
+        );
+      }
+    }
+    
     return String(value);
+  };
+
+  const handleRowClick = (index: number) => {
+    setSelectedRowIndex(index === selectedRowIndex ? null : index);
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent, index: number) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      handleRowClick(index);
+    }
   };
 
   if (data.length === 0) {
@@ -96,40 +184,87 @@ const DataTable: React.FC<DataTableProps> = ({ data }) => {
     <div className="h-full flex flex-col">
       <div className="flex-1 min-h-0 min-w-0">
         <div className="h-full w-full min-w-0 overflow-x-auto overflow-y-auto">
-          <table
-            className="min-w-max divide-y divide-gray-200"
-            style={{ minWidth: `${columns.length * 150}px` }}
-          >
-        <thead className="bg-gray-50">
-          <tr>
-            {columns.map(column => (
-              <th
-                key={column}
-                onClick={() => handleSort(column)}
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 whitespace-nowrap"
-              >
-                <div className="flex items-center space-x-1">
-                  <span>{column}</span>
-                  {getSortIcon(column)}
-                </div>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="bg-white divide-y divide-gray-200">
-          {sortedData.map((row, index) => (
-            <tr key={index} className="hover:bg-gray-50">
-              {columns.map(column => (
-                <td key={column} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {formatValue(row[column], column)}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-        </table>
+          {/* Mobile responsive wrapper */}
+          <div className="min-w-full lg:min-w-max">
+            <table
+              className="min-w-full divide-y divide-gray-200"
+              role="table"
+              aria-label="Filament data table"
+              style={{ minWidth: `${columns.length * 120}px` }}
+            >
+              <thead className="table-header sticky top-0 z-10">
+                <tr role="row">
+                  {columns.map(column => (
+                    <th
+                      key={column}
+                      onClick={() => handleSort(column)}
+                      className="table-header-cell focus-visible"
+                      role="columnheader"
+                      tabIndex={0}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSort(column)}
+                      aria-sort={
+                        sortConfig?.key === column
+                          ? sortConfig.direction === 'asc' ? 'ascending' : 'descending'
+                          : 'none'
+                      }
+                      aria-label={`Sort by ${column}`}
+                    >
+                      <div className="flex items-center justify-between min-w-0">
+                        <span className="truncate mr-2" title={column}>{column}</span>
+                        <span className="flex-shrink-0">{getSortIcon(column)}</span>
+                      </div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200" role="rowgroup">
+                {sortedData.map((row, index) => (
+                  <tr
+                    key={index}
+                    onClick={() => handleRowClick(index)}
+                    onKeyDown={(e) => handleKeyDown(e, index)}
+                    tabIndex={0}
+                    role="row"
+                    aria-selected={selectedRowIndex === index}
+                    aria-rowindex={index + 1}
+                    className={`
+                      table-row focus-visible
+                      ${selectedRowIndex === index ? 'table-row-selected' : ''}
+                    `}
+                  >
+                    {columns.map((column, colIndex) => (
+                      <td
+                        key={column}
+                        className="table-cell"
+                        role="gridcell"
+                        aria-describedby={`col-${colIndex}-desc`}
+                      >
+                        <div className="min-w-0">
+                          {formatValue(row[column], column)}
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
+      
+      {/* Screen reader announcements */}
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {selectedRowIndex !== null && sortedData[selectedRowIndex] && (
+          `Selected row ${selectedRowIndex + 1}: ${sortedData[selectedRowIndex].Brand} ${sortedData[selectedRowIndex]['Filament type']}`
+        )}
+      </div>
+      
+      {/* Column descriptions for screen readers */}
+      {columns.map((column, index) => (
+        <div key={`desc-${column}`} id={`col-${index}-desc`} className="sr-only">
+          {column} column data
+        </div>
+      ))}
     </div>
   );
 };
