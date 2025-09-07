@@ -56,40 +56,58 @@ const validateUrl = (url: string): string => {
 
 const validateAndSanitizeRow = (row: any, headerRow: string[]): FilamentData | null => {
   const sanitizedRow: any = {};
-  
+  let hasValidData = false;
   headerRow.forEach((header, colIndex) => {
-    if (!header || row[colIndex] === undefined || row[colIndex] === null) return;
+    if (!header || header.trim() === '') {
+      return; // Skip empty headers
+    }
     
     const value = row[colIndex];
     const cleanHeader = sanitizeString(header);
     
-    // Skip suspicious or empty values
-    if (value === 'undefined' || value === '' || cleanHeader === '') return;
+    // Skip suspicious headers
+    if (cleanHeader === '') {
+      return;
+    }
+    
+    // Always include the column in the object, even if value is empty
+    // This ensures all columns are present in the final data structure
+    if (value === undefined || value === null || value === '' || value === 'undefined') {
+      sanitizedRow[cleanHeader] = null; // Use null for empty values
+      return;
+    }
     
     // Handle different data types based on column name patterns
     if (cleanHeader.toLowerCase().includes('link') || cleanHeader.toLowerCase().includes('url')) {
       // Validate URLs
       const sanitizedUrl = validateUrl(String(value));
-      if (sanitizedUrl) {
-        sanitizedRow[cleanHeader] = sanitizedUrl;
-      }
-    } else if (typeof value === 'number' || !isNaN(Number(String(value).trim()))) {
+      sanitizedRow[cleanHeader] = sanitizedUrl || null;
+      hasValidData = true;
+    } else if (typeof value === 'number' || (!isNaN(Number(String(value).trim())) && String(value).trim() !== '')) {
       // Handle numeric values
-      sanitizedRow[cleanHeader] = sanitizeNumber(value);
+      const numValue = sanitizeNumber(value);
+      sanitizedRow[cleanHeader] = numValue;
+      hasValidData = true;
     } else {
       // Handle string values
       const sanitizedString = sanitizeString(value);
-      if (sanitizedString && sanitizedString.length <= 1000) { // Limit string length
-        sanitizedRow[cleanHeader] = sanitizedString;
+      sanitizedRow[cleanHeader] = sanitizedString || null;
+      if (sanitizedString && sanitizedString.length <= 1000) {
+        hasValidData = true;
       }
     }
   });
   
-  // Ensure required fields are present
-  if (!sanitizedRow.Brand || !sanitizedRow['Filament type']) {
+  // More flexible validation - require either Brand OR some identifying information
+  const hasIdentification = sanitizedRow.Brand ||
+                            sanitizedRow['Filament type'] ||
+                            sanitizedRow.Material ||
+                            sanitizedRow.Type ||
+                            Object.keys(sanitizedRow).length > 5; // Has multiple fields
+  
+  if (!hasIdentification) {
     return null; // Invalid row
   }
-  
   return sanitizedRow as FilamentData;
 };
 
@@ -117,7 +135,7 @@ export const parseExcelFile = async (file: File): Promise<FilamentData[]> => {
         const workbook = XLSX.read(data, { type: 'array' });
         
         // Try to find the main "Filaments" sheet first, otherwise use first sheet
-        const sheetName = workbook.SheetNames.find(name => 
+        const sheetName = workbook.SheetNames.find(name =>
           name.toLowerCase().includes('filament') && !name.toLowerCase().includes('flexible')
         ) || workbook.SheetNames[0];
         
@@ -136,8 +154,6 @@ export const parseExcelFile = async (file: File): Promise<FilamentData[]> => {
           throw new Error('No header row found');
         }
 
-
-        
         // Process data starting from row 2 (0-indexed)
         const dataRows = rawData.slice(2);
         
@@ -226,14 +242,13 @@ export const validateExcelData = (data: FilamentData[]): string[] => {
     errors.push(`Suspicious column names detected: ${suspiciousColumns.join(', ')}`);
   }
   
-  // Required columns that should exist (using actual Excel column names)
-  const requiredColumns = ['Brand', 'Filament type'];
+  // More flexible validation - check for at least some identifying columns
+  const identifyingColumns = ['Brand', 'Filament type', 'Material', 'Type', 'Name'];
+  const hasIdentifyingColumn = identifyingColumns.some(column => column in firstRow);
   
-  requiredColumns.forEach(column => {
-    if (!(column in firstRow)) {
-      errors.push(`Missing required column: ${column}`);
-    }
-  });
+  if (!hasIdentifyingColumn) {
+    errors.push(`Missing identifying columns. Expected at least one of: ${identifyingColumns.join(', ')}`);
+  }
   
   // Check that we have some numeric data columns
   const numericColumns = availableColumns.filter(col =>

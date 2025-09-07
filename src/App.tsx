@@ -45,12 +45,12 @@ const App: React.FC = () => {
   const filteredData = useMemo(() => {
     return data.filter(item => {
       // Brand filter
-      if (filters.brands.length > 0 && !filters.brands.includes(item.Brand)) {
+      if (filters.brands.length > 0 && item.Brand && !filters.brands.includes(item.Brand)) {
         return false;
       }
 
       // Filament type filter
-      if (filters.filamentTypes.length > 0 && !filters.filamentTypes.includes(item['Filament type'])) {
+      if (filters.filamentTypes.length > 0 && item['Filament type'] && !filters.filamentTypes.includes(item['Filament type'])) {
         return false;
       }
 
@@ -74,7 +74,7 @@ const App: React.FC = () => {
           item.Fibers
         ];
         
-        const matches = searchableFields.some(field => 
+        const matches = searchableFields.some(field =>
           field && field.toLowerCase().includes(searchLower)
         );
         
@@ -98,7 +98,23 @@ const App: React.FC = () => {
   // Get numeric columns for chart axes
   const numericColumns = useMemo(() => {
     if (data.length === 0) return [];
-    return Object.keys(data[0]).filter(key => typeof data[0][key] === 'number');
+
+    const columns = Object.keys(data[0]).filter(key => {
+      // Check if the column has any numeric values across all rows
+      const hasNumericValues = data.some(row => {
+        const value = row[key];
+        return typeof value === 'number' && !isNaN(value) && isFinite(value);
+      });
+
+      // Also check if the first row value is numeric (for backwards compatibility)
+      const firstValue = data[0][key];
+      const firstIsNumeric = typeof firstValue === 'number' && !isNaN(firstValue) && isFinite(firstValue);
+
+      return hasNumericValues || firstIsNumeric;
+    });
+
+
+    return columns;
   }, [data]);
 
   // Set default chart axes when data changes
@@ -113,12 +129,20 @@ const App: React.FC = () => {
   }, [numericColumns, chartConfig.xAxis, chartConfig.yAxis]);
 
   const handleFileUpload = async (file: File) => {
+    console.log('Starting file upload process.');
     setLoading(true);
     setError(null);
 
     try {
+      console.log('Parsing Excel file.');
       const parsedData = await parseExcelFile(file);
+      console.log('Excel parsing complete:', {
+        rows: parsedData.length,
+        columns: parsedData.length > 0 ? Object.keys(parsedData[0]) : []
+      });
+
       const validationErrors = validateExcelData(parsedData);
+      console.log('🔍 Validation results:', validationErrors);
 
       if (validationErrors.length > 0) {
         setError(`Data validation failed: ${validationErrors.join(', ')}`);
@@ -126,8 +150,10 @@ const App: React.FC = () => {
         return;
       }
 
+      console.log('Saving data to state and localStorage.');
       setData(parsedData);
       localStorage.setItem('mytechfun-filament-data', JSON.stringify(parsedData));
+      console.log('Data saved successfully');
 
       // Reset filters when new data is loaded
       setFilters({

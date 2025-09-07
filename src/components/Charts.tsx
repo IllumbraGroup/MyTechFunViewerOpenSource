@@ -16,7 +16,20 @@ interface ChartsProps {
 const Charts: React.FC<ChartsProps> = ({ data, chartType, xAxis, yAxis }) => {
   const numericColumns = React.useMemo(() => {
     if (data.length === 0) return [];
-    return Object.keys(data[0]).filter(key => typeof data[0][key] === 'number');
+
+    return Object.keys(data[0]).filter(key => {
+      // Check if the column has any numeric values across all rows
+      const hasNumericValues = data.some(row => {
+        const value = row[key];
+        return typeof value === 'number' && !isNaN(value) && isFinite(value);
+      });
+
+      // Also check if the first row value is numeric (for backwards compatibility)
+      const firstValue = data[0][key];
+      const firstIsNumeric = typeof firstValue === 'number' && !isNaN(firstValue) && isFinite(firstValue);
+
+      return hasNumericValues || firstIsNumeric;
+    });
   }, [data]);
 
   const scatterData = React.useMemo(() => {
@@ -82,10 +95,10 @@ const Charts: React.FC<ChartsProps> = ({ data, chartType, xAxis, yAxis }) => {
     const topFilaments = data
       .slice()
       .sort((a, b) => {
-        const aScore = (a['Tensile (kg)'] as number || 0) +
-                      (a['Layer adhesion (kg)'] as number || 0);
-        const bScore = (b['Tensile (kg)'] as number || 0) +
-                      (b['Layer adhesion (kg)'] as number || 0);
+        const aScore = (a['Tensile (kg)'] as number ?? 0) +
+                      (a['Layer adhesion (kg)'] as number ?? 0);
+        const bScore = (b['Tensile (kg)'] as number ?? 0) +
+                      (b['Layer adhesion (kg)'] as number ?? 0);
         return bScore - aScore;
       })
       .slice(0, 3);
@@ -97,7 +110,7 @@ const Charts: React.FC<ChartsProps> = ({ data, chartType, xAxis, yAxis }) => {
       name: `${f.Brand} ${f['Filament type']}`,
       brand: f.Brand,
       type: f['Filament type'],
-      base: f.Base
+      base: f.Base || 'Unknown'
     }));
     
         const chartData = keyColumns.map(column => {
@@ -155,7 +168,7 @@ const Charts: React.FC<ChartsProps> = ({ data, chartType, xAxis, yAxis }) => {
   };
 
   const RadarTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length && radarData?.filaments) {
+    if (active && payload && payload.length && radarData && 'filaments' in radarData && radarData.filaments) {
       const data = payload[0].payload;
       const property = data.property;
 
@@ -274,7 +287,7 @@ const Charts: React.FC<ChartsProps> = ({ data, chartType, xAxis, yAxis }) => {
       );
 
     case 'radar':
-      if (!radarData || !radarData.data || radarData.data.length === 0) {
+      if (!radarData || !('data' in radarData) || !radarData.data || radarData.data.length === 0) {
         return (
           <div className="h-full flex items-center justify-center">
             <div className="text-gray-500 text-center">
@@ -291,7 +304,7 @@ const Charts: React.FC<ChartsProps> = ({ data, chartType, xAxis, yAxis }) => {
             <h3 className="text-lg font-semibold">Top 3 Filaments Comparison</h3>
             <p className="text-sm text-gray-600">Normalized performance metrics (0-100 scale)</p>
             <div className="mt-2 space-y-1">
-              {radarData.filaments.map((filament, index) => (
+              {('filaments' in radarData ? radarData.filaments : []).map((filament, index) => (
                 <div key={index} className="flex items-center text-sm">
                   <div
                     className="w-3 h-3 rounded-full mr-2"
@@ -306,12 +319,12 @@ const Charts: React.FC<ChartsProps> = ({ data, chartType, xAxis, yAxis }) => {
             </div>
           </div>
           <ResponsiveContainer width="100%" height="80%">
-            <RadarChart data={radarData.data}>
+            <RadarChart data={'data' in radarData ? radarData.data : []}>
               <PolarGrid />
               <PolarAngleAxis dataKey="property" />
               <PolarRadiusAxis domain={[0, 100]} />
               <Tooltip content={<RadarTooltip />} />
-              {radarData.filaments.map((filament, index) => (
+              {('filaments' in radarData ? radarData.filaments : []).map((filament, index) => (
                 <Radar
                   key={index}
                   name={filament.name}

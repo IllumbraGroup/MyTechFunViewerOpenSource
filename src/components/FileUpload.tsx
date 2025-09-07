@@ -9,6 +9,11 @@ interface FileUploadProps {
 const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload, isLoading }) => {
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
+      console.log('📁 File uploaded via drop:', {
+        name: acceptedFiles[0].name,
+        size: acceptedFiles[0].size,
+        type: acceptedFiles[0].type
+      });
       onFileUpload(acceptedFiles[0]);
     }
   }, [onFileUpload]);

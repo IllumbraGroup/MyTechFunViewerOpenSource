@@ -119,11 +119,25 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
 
   const numericColumns = React.useMemo(() => {
     if (data.length === 0) return [];
-    
-    return Object.keys(data[0]).filter(key => 
-      typeof data[0][key] === 'number' && 
-      !key.includes('Price') // We'll handle price separately if needed
-    );
+
+    const columns = Object.keys(data[0]).filter(key => {
+      // Check if the column has any numeric values across all rows
+      const hasNumericValues = data.some(row => {
+        const value = row[key];
+        return typeof value === 'number' && !isNaN(value) && isFinite(value);
+      });
+
+      // Also check if the first row value is numeric (for backwards compatibility)
+      const firstValue = data[0][key];
+      const firstIsNumeric = typeof firstValue === 'number' && !isNaN(firstValue) && isFinite(firstValue);
+
+      // Exclude price columns as requested
+      const isPriceColumn = key.includes('Price');
+
+      return (hasNumericValues || firstIsNumeric) && !isPriceColumn;
+    });
+
+    return columns;
   }, [data]);
 
   const getMinMax = (column: string) => {
