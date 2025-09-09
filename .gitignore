@@ -148,3 +148,5 @@ vite.config.ts.timestamp-*
 
 # DynamoDB Local files
 .dynamodb/
+src/firebase.ts
+firebase.json
